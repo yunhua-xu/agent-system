@@ -1,0 +1,39 @@
+# .dockerignore —— 哪些文件【不要】拷进镜像
+# 名字固定就叫 .dockerignore（前面有个点，一个字都不能改），Docker 只认这个名字
+# 作用跟 .gitignore 一个道理，但管的是另一件事：
+#   .gitignore   管"哪些文件不传 GitHub"
+#   .dockerignore管"哪些文件不进镜像"
+# ★ 两个都要有，因为这是两条完全不同的路：上传 Git 和 打包镜像 互不相干。
+
+# 【最重要的一条】密钥绝不进镜像
+.env
+
+# 备份和临时文件（我每次改代码前都会备份一份，这些不该进镜像）
+_备份_*/
+*.bak*
+*.bak_*
+*.py.bak*
+__pycache__/
+*.pyc
+*.pyo
+
+# Git 自己的目录（进了镜像也没用，还占体积）
+.git/
+.gitignore
+
+# 运行时才生成的东西（镜像应该是"干净的出厂状态"，跑起来再生成）
+# ★ 说明：api.py 第 107 行有 LOG_DIR.mkdir(parents=True, exist_ok=True)，
+#   会自己把 logs/ 建出来，所以这里忽略掉不影响运行
+logs/
+chroma_db/
+results.json
+results.csv
+
+# 评测跑出来的中间结果、截图等参考资料
+docs/
+
+# 本机专用的启动脚本（容器里是 Linux，用不上 .bat）
+启动API服务.bat
+
+# 演示视频脚本（给人看的文档，不用塞进镜像）
+演示视频脚本.md

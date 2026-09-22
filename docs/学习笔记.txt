@@ -1,0 +1,4 @@
+Agent 系统学习笔记
+Day45：LangGraph 的 StateGraph，用 add_node 加节点、add_edge 连边。
+Day46：写了 15 个测试场景，验证 Agent 会不会正确调用工具。
+Day48：学 MCP，把工具暴露成标准接口，让别的程序也能用。

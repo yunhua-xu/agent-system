@@ -1,0 +1,52 @@
+# 好处：一条命令 docker compose up 就把 API + 网页全部拉起来，不用手工敲一长串 docker run
+# 注意：新版 compose 已经不需要写 version: "3" 那一行，写了会有一条黄色警告
+
+services:                       # services = 服务列表（每个服务 = 一个容器）
+
+  api:                          # ---------- 服务1：FastAPI 接口 ----------
+    build: .                    # build = 用当前目录的 Dockerfile 现场构建镜像（. 就是当前目录）
+    image: agent-system:1.0     # 给构建出来的镜像起个名字+版本号，方便以后 docker images 里认出来
+    container_name: agent-api   # 给容器起个固定名字（不写的话 Docker 会随机起名）
+    ports:                      # ports = 端口映射（把容器端口"接"到你电脑上）
+      - "8000:8000"             # 左边是你电脑的端口，右边是容器里的端口；含义：访问本机8000 = 访问容器8000
+    env_file:                   # env_file = 从这个文件读环境变量注入容器
+      - .env                    # ★ .env 里有 DEEPSEEK_API_KEY；用这种方式传密钥，而不是写死在代码/镜像里
+    volumes:                    # volumes = 目录挂载（把本机文件夹"接"进容器）
+      - ./:/app                 # ★ 把整个项目目录挂到容器 /app —— 改完 .py 存一下，容器里立刻生效，不用重新 build
+                                #   这一条同时也把 .env、chroma_data/、chat.log 一起带进容器了，不用再单独挂
+                                #   ★ 面试可能问：挂载会盖掉镜像里 /app 的内容。放心——依赖装在 site-packages，不在 /app，不受影响
+    restart: unless-stopped     # 容器意外挂了自动重启（你自己 docker compose down 停掉的除外）
+    healthcheck:                # healthcheck = 健康检查，定期摸摸接口活着没
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs')"]
+      interval: 30s             # 每 30 秒检查一次
+      timeout: 5s               # 超过 5 秒算这次检查失败
+      retries: 3                # 连续失败 3 次，才把状态标成 unhealthy
+
+  ui:                           # ---------- 服务2：Streamlit 网页界面 ----------
+    build: .                    # 用的是同一个 Dockerfile（第二次构建会直接命中缓存，几秒就好）
+    image: agent-system:1.0     # ★ 跟 api 用同一个镜像名，避免重复构建出两份
+    container_name: agent-ui    # 容器名
+    command: streamlit run ui.py --server.port 8501 --server.address 0.0.0.0
+                                # command = 覆盖 Dockerfile 里那条 CMD（那个是启动 FastAPI 的）
+                                # 这里改成启动网页；--server.address 0.0.0.0 和上面说的一个道理：不写就只有容器自己能访问
+    ports:
+      - "8501:8501"             # 本机 8501 → 容器 8501；浏览器打开 http://localhost:8501
+    env_file:
+      - .env                    # 网页里调大模型也要用 Key
+    environment:                # environment = 直接在这里补一个环境变量（不放进 .env 的小配置写这）
+      - API_BASE=http://api:8000   # ★ 关键：容器之间通信用"服务名"当网址，不是 localhost！
+                                   #   api 是上面那个服务的名字，Docker 内部 DNS 会自动解析成它的 IP
+                                   #   写成 localhost 就变成"ui 容器自己"，永远连不上 api
+    volumes:
+      - ./:/app                 # 同样挂载代码，改 ui.py 不用重建
+    depends_on:                 # depends_on = 启动顺序：先起 api，再起 ui
+      - api                     # 注意：它只管"启动的先后"，不等于"api 已经能用了"
+                                # 进阶写法是 depends_on + condition: service_healthy（等 api 健康了再起 ui）
+                                # 这里故意用简单写法：演示当天万一健康检查慢半拍，也不会卡住 ui 起不来
+
+# ---------- 常用命令（背下来，面试会问）----------
+# 启动（前台，能看到日志）：docker compose up
+# 启动（后台）：            docker compose up -d
+# 改了代码要重新构建：      docker compose up --build
+# 看日志：                  docker compose logs -f api
+# 停掉并删除容器：          docker compose down

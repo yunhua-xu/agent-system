@@ -1,0 +1,59 @@
+# requirements.txt —— 依赖清单：这个项目要装哪些第三方包
+# 用法（在cmd里做）：先打开cmd（Win键→输入cmd→回车），再 cd /d "E:\8月3日Ai学习计划\每日练习\agent_system"，然后敲：
+#     pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#   -r = read 读这个清单文件；-i 后面是清华镜像源，国内装包快很多（不换会超时）
+#
+# ★ 版本号说明：下面的版本号是【本机 pip 实际装到的版本】（用 pip list 一个个查出来的），
+#   不是照抄网上的。写死版本号的好处：换台电脑装出来一模一样，不会"今天能跑、明天报错"。
+#   面试被问到就说：版本我固定了，保证可复现；不写版本（用最新）会有"昨天还好的今天就崩"的风险。
+
+
+# ---------- 一、Agent 核心（agent_graph.py / api.py 用）----------
+langgraph==1.2.11            # LangGraph = 把 Agent 画成图来跑（agent 节点 / tools 节点 / 条件边）
+langchain-core==1.5.6        # 消息类型（HumanMessage / SystemMessage）、@tool 装饰器都在这里面
+langchain-openai==1.5.2      # ChatOpenAI 类；DeepSeek 是"OpenAI 兼容接口"，所以用它来连 DeepSeek
+
+
+# ---------- 二、接口和网页（api.py / ui.py 用）----------
+fastapi==0.136.1             # FastAPI = 做网络接口的框架，api.py 里的 app = FastAPI() 就是它
+uvicorn==0.47.0              # uvicorn = 真正把 FastAPI 跑起来的服务器程序（★命令行里敲的 uvicorn 就是它，不是 import 进来的）
+pydantic==2.13.5             # pydantic = 数据校验；api.py 里的 ChatRequest / ChatResponse 都是它家的 BaseModel
+streamlit==1.62.0            # Streamlit = 做网页界面的库，ui.py 整个文件都是它（★也是命令行敲 streamlit run ui.py）
+
+
+# ---------- 三、记忆（memory.py 用）----------
+chromadb==1.5.9              # ChromaDB = 本地向量数据库，长期记忆存在 ./chroma_db 文件夹里
+
+
+# ---------- 四、联网搜索（tools.py / tools5.py 用）----------
+ddgs==9.16.0                 # ddgs = 新版搜索包（duckduckgo 的包改名了），tools.py 里用的是它
+# duckduckgo_search        # ← 旧版搜索包，tools5.py 里留了个降级链：ddgs 不行才回头用它。
+                           #   本机【没装这个】，因为 ddgs 是好的、根本走不到降级那一步。
+                           #   想装就把这行开头的 # 去掉。
+                           #   ★ 这里故意不写版本号：本机没装过，我没法核对真实版本，
+                           #     宁可写"不锁版本"，也不编一个假版本号糊上去。
+                             #   ★ 注意别两个都写最新版：这俩包是"新名旧名"关系，同时装容易打架。
+
+
+# ---------- 五、MCP（Day48 的 mcp_server.py / mcp_client.py 用）----------
+fastmcp==4.0.4               # fastmcp = 写 MCP 服务器的高层封装，mcp_server.py 里 from fastmcp import FastMCP
+mcp==2.2.0                   # mcp = 官方底层协议包，mcp_client.py 里连服务器用的（ClientSession / stdio_client）
+
+
+# ---------- 六、读 .env 里的密钥（agent_graph.py / api.py / memory.py 都用）----------
+python-dotenv==1.2.2         # python-dotenv = 把 .env 文件里的密钥读进环境变量；import 的名字叫 dotenv
+                             # 为什么用它：密钥写死在代码里、又传到 GitHub，等于把钥匙插在门上
+
+
+# ============================================================================
+# ★ 特意【不写】在这个清单里的东西（不是漏了，是想清楚了）：
+#
+#   langchain          —— 没装、也没被 import。很多人以为必须装这个"总包"，
+#                         实际上项目只用 langchain-core / langchain-openai / langgraph 三个子包。
+#   langchain-community—— 本机装了（0.4.2）但项目代码一行都没 import，纯属其它项目带来的。
+#   langchain-chroma   —— 没装。memory.py 是直接用 chromadb 的，不经过 langchain 的封装。
+#   httpx              —— 没装（其实是别的包的间接依赖）。发网络请求用的是 Python 自带的 urllib。
+#
+# 面试加分点：被问"你的依赖怎么定的"，就答——按【真实 import 到的东西】定的，
+#             一个个对着代码 grep 出来的；用不到的不写进清单，镜像才小、装得才快。
+# ============================================================================
