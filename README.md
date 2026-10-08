@@ -7,14 +7,14 @@
 
 ## 一、功能
 
-- **5 个工具**：联网搜索 / 计算器 / 查时间 / 查天气 / 读文件（每个就是一个普通函数，登记在 `TOOLS` 列表里）
+- **8 个工具**：联网搜索 / 计算器 / 两数相加 / 查时间 / 查天气 / 读文件 / 查快递 / **记住事实（`remember_fact`，2026-10-08 新增）**（每个就是一个普通函数，登记在 `TOOLS` 列表里 —— **全项目只有这一份清单**，`agent_graph.py` 和 `api.py` 都从 `tools.py` 导入它）
 - **ReAct 循环**：想（Thought）→ 做（Action）→ 看结果（Observation）→ 再想，用 LangGraph 画成图来跑
-- **记忆模块（独立，见 `memory.py`）**：短期记忆（对话太长自动压成摘要）+ 长期记忆（"我叫小徐"这类事实存进 ChromaDB，下次开新会话还记得）
-  > ⚠️ **实话实说**：这个模块**代码完整、能单独跑通**，但**目前还没被 `api.py` / `agent_graph.py` import 进主链路**——
-  > 也就是说，主链路的 `/chat` 现在是无状态、不记历史的。接入是下一步的活。
-  > 别人问起就直说：**"记忆模块我独立实现并验证过了，主链路接入是下一步。"**——不夸大、也不含糊。
-- **自愈模块（独立，见 `robust_tools.py`）**：工具调用失败自动重试（指数退避）；参数写错了，把报错还给 AI 让它自己改
-  > ⚠️ 同上：独立模块，**未接入主链路**。
+- **长期记忆（✅ 已接进主链路，见 `memory.py`）**："我叫小徐"这类事实存进 ChromaDB，**换个新对话它还记得** —— `agent_graph.py` 每次发消息给模型之前，先拿用户这句话去记忆库查一趟，把查到的事实拼进系统提示词（就是 `_system_prompt_with_memory()` 那个函数）。
+  > ✅ **2026-10-08 接入并真跑验证过**：新开一个会话、一条历史都不带，问"我叫什么"，它答得出"你叫小徐"。存事实由第 8 个工具 `remember_fact` 完成 —— **存什么由模型自己判断**（不是无脑全存，那样库里很快全是噪音）。
+  > ⚠️ **短期记忆（`ShortTermMemory`，对话太长压成摘要）还没接** —— 它要"同一个会话连续聊"才有意义，而 `api.py` 目前是无状态的（每次请求只发一条消息）。这一块照实说："独立实现并验证过，接入是下一步。"
+- **工具自愈（✅ 已接进主链路，见 `robust_tools.py`）**：把 LangGraph 自带的 `ToolNode` 换成自己写的 `tools_node`，**每一次工具调用都过一遍自愈管道**：失败 → 修参数 → 指数退避等待 → 重试 → 还不行才用兜底结果。
+  > ⚠️ **这个边界一定要说准**：管道接得住的是"模型传错参数"（`TypeError`）和"工具没捕获的异常"。而 `tools.py` 里有些工具**自己在函数内部把异常吃掉、返回了一句失败文案**（当年写的时候就是为了给模型一句人话），那种情况管道不会重复兜底。
+  > 面试照实讲："我给工具调用建了一条统一的自愈管道，参数错误和未捕获异常会走重试加兜底；工具内部自己处理过的错误，管道不重复兜底。" —— 这比吹"所有工具都自动重试"强，因为它是真的。
 - **思考链可见**：网页上能逐步看到 AI 在想什么、调了哪个工具、工具返回了什么
 - **对外接口**：FastAPI 提供 `/chat`（提问）和 `/history`（查历史），每一步写 JSON Lines 日志（`logs/trace.jsonl`）
 - **一键启动**：`docker compose up` 起整套系统（接口 + 网页）
@@ -35,7 +35,7 @@ flowchart TB
     subgraph Graph["LangGraph 调度器 agent_graph.py（Agent 大脑）"]
         direction TB
         Agent["agent 节点<br/>思考：要不要用工具？用哪个？"]
-        Tools["tools 节点 ToolNode<br/>真的执行工具"]
+        Tools["tools 节点 tools_node<br/>执行工具（过自愈管道）"]
         Agent -->|"需要工具（有 tool_calls）"| Tools
         Tools -->|把工具结果塞回消息| Agent
         Agent -->|"不需要工具了"| End(["END 结束"])
@@ -43,11 +43,15 @@ flowchart TB
 
     Tools --> T1["联网搜索"]
     Tools --> T2["计算器"]
-    Tools --> T3["查时间"]
-    Tools --> T4["查天气"]
-    Tools --> T5["读文件"]
+    Tools --> T3["两数相加"]
+    Tools --> T4["查时间"]
+    Tools --> T5["查天气"]
+    Tools --> T6["读文件"]
+    Tools --> T7["查快递"]
+    Tools --> T8["记住事实 remember_fact"]
 
-    Graph --> Memory["记忆 memory.py<br/>短期：摘要压缩<br/>长期：ChromaDB 持久化"]
+    Agent -->|"recall 查记忆"| Memory["记忆 memory.py<br/>长期事实库（已接入）<br/>recall 查 / remember_fact 存"]
+    Tools -->|"remember_fact 存事实"| Memory
     Memory --> DB[("ChromaDB<br/>chroma_db/")]
     API --> Log[("logs/trace.jsonl<br/>JSON Lines 日志")]
     Graph --> LLM["DeepSeek 大模型<br/>api.deepseek.com"]
@@ -76,8 +80,9 @@ flowchart TB
                          └── 把结果塞回消息 ──────────────────┘
                                   （循环，直到不用工具）
 
-     工具：联网搜索 · 计算器 · 查时间 · 查天气 · 读文件
-     记忆：短期=摘要压缩  长期=ChromaDB（chroma_db/）
+     工具：联网搜索 · 计算器 · 两数相加 · 查时间 · 查天气 · 读文件 · 查快递 · 记住事实
+     记忆：长期=ChromaDB（chroma_db/）已接进主链路，每次提问前先 recall 查一趟
+           短期=摘要压缩（独立模块，待接）
      模型：DeepSeek（api.deepseek.com）
 ```
 
@@ -102,7 +107,7 @@ flowchart TB
 [4] 条件边 tools_condition 判断
      │  有 tool_calls → 走 tools 节点
      ▼
-[5] tools 节点（ToolNode 真的执行）
+[5] tools 节点（tools_node 真的执行；每次调用都过一遍自愈管道，失败会重试）
      │  真的调用 get_time() 拿到 "2026-09-25 14:30:00"
      │  包成 ToolMessage 塞回消息列表
      ▼
@@ -133,13 +138,13 @@ flowchart TB
 
 ```
 agent_system/                     ← 项目根目录（就是本文件所在目录）
-├── tools.py                      # 5 个工具函数 + TOOLS 注册表（工具就是一个普通函数）
-├── agent_graph.py                # LangGraph 建图：agent 节点 + tools 节点 + 条件边
+├── tools.py                      # 8 个工具函数 + 【全项目唯一的 TOOLS 注册表】+ TOOL_MAP 对照表
+├── agent_graph.py                # LangGraph 建图：agent 节点（内含记忆查询）+ tools 节点（过自愈管道）+ 条件边
 ├── api.py                        # FastAPI 接口：/chat、/history + JSON Lines 日志
 ├── ui.py                         # Streamlit 网页：思考链可视化
 ├── thought_chain.py              # 把 messages 整理成"一步一步"（纯逻辑，不含 streamlit）
-├── memory.py                     # 双记忆：短期摘要压缩 + 长期 ChromaDB 持久化（独立演示，还没接进 api.py）
-├── robust_tools.py               # 自愈：重试、指数退避、参数修正、兜底（独立演示，还没接进 api.py）
+├── memory.py                     # 双记忆：短期摘要压缩 + 长期 ChromaDB 持久化（★长期记忆 2026-10-08 已接进主链路）
+├── robust_tools.py               # 自愈：重试、指数退避、参数修正、兜底（★2026-10-08 已接进主链路，由 tools_node 调用）
 ├── tools5.py                     # Day44：工具强化版（联网搜索带降级链：ddgs 不行就换 duckduckgo_search）
 ├── mcp_server.py                 # Day48：用 FastMCP 把工具暴露成标准协议给别的 AI 用
 ├── mcp_client.py                 # Day48：MCP 客户端，去连上面的 server
@@ -159,7 +164,7 @@ agent_system/                     ← 项目根目录（就是本文件所在目
 │   └── trace.jsonl               # 运行日志（一行一条 JSON，api.py 每次请求追加一行）
 ├── results.json / results.csv    # edge_cases.py 跑出来的评测结果
 ├── docs/                         # 截图放这儿（第六节引用）
-├── git_commands.txt              # 常用的 git 命令（提交、打标签、推上去）
+├── docker说明.txt                # ★ Dockerfile 和 docker-compose.yml 的逐行注释版（学习时整理的，不是 git 命令）
 ├── resume_star.md                # 简历上怎么写这个项目（STAR 结构草稿）
 ├── resume_v1.md                  # 简历初版：两个项目的 STAR 素材（含"每个数字从哪来"对照表）
 ├── 启动API服务.bat                # 双击就起 uvicorn（省得手敲命令）

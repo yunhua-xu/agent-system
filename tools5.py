@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # 上面这行是告诉 Python：这个文件用 UTF-8 编码，里面的中文注释才不会乱码。
-# 文件名：tools.py   —— tools 是"工具"的复数，这个文件专门放"给智能体调用的工具函数"。
+# 文件名：tools5.py  —— ★2026-09-27 订正：这里原来写的是「文件名：tools.py」，是错的，
+#   连自己的文件名都写错了。这个文件是 Day44 的「工具强化版」（联网搜索带降级链：
+#   ddgs 连不上就回头用 duckduckgo_search），后来被 tools.py 取代，保留下来当学习记录。
+#   ★ 真正在用的工具在 tools.py；本文件没有被任何代码 import（README 里也标注了它是早期文件）。
 
 import os          # os = operating system（操作系统），用它来处理文件路径、判断文件在不在。
 import ast         # ast = abstract syntax tree（抽象语法树），用它来"安全地"解析数学算式，比直接用 eval 安全。

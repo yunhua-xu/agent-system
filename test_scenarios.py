@@ -2,7 +2,8 @@
 # 核心思想：跑之前先写下"这题应该调哪个工具"，跑完拿实际结果去比。
 #          没有"期望值"的测试就是走过场 —— 模型自己编个答案你也看不出来。
 
-from agent_graph import app, reset_flaky              # app = Day45 建好的图；reset_flaky = 把"会失败的工具"计数清零
+from agent_graph import app                           # app = Day45 建好的图
+from tools import reset_flaky                         # ★2026-10-07 改：reset_flaky 跟着 query_package 一起搬去 tools.py 了（唯一来源，别再从这里 import）
 from langchain_core.messages import HumanMessage      # HumanMessage = 人类（用户）说的那条消息
 
 # ============ 一、场景表 ============
@@ -50,6 +51,8 @@ EXPECT_MIN_CALLS = {
 #      第二次才成功。这才能真的测出"模型看到报错后会不会再试一次"。
 #      注意它是"有状态"的（靠 _flaky_state 这个字典记次数），所以每道题开跑前要 reset_flaky() 清零，
 #      否则第 2 道题一上来就成功了，测不出重试。
+#      ★2026-10-07 补：query_package 和 reset_flaky 后来从 agent_graph.py 搬到了 tools.py
+#        （工具和它的状态都归工具箱管，agent_graph.py 只管画图），所以第 5 行的 import 也改了。
 #
 # 坑2：「超出能力」场景，问题里千万别带"明天 / 今天"这类词。
 #      我实测：问"帮我订一张【明天】去北京的机票"，模型会为了算"明天是几号"去调 get_time，

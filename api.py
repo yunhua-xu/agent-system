@@ -43,15 +43,18 @@ class ChatResponse(BaseModel):             # ChatResponse = 聊天响应的意�
     tools_used: List[str]                  # tools_used = 用到的工具列表；List[str] 表示"字符串组成的列表"
     elapsed: float                         # elapsed = 已经过去的意思，这里指这次请求花了多少秒；float = 小数
 
-# ---------- 第 4 部分：工具清单（★Day53 改：改成从 tools.py 统一取，不再自己另写一份）----------
-# ★ 为什么非改不可？
-#   原来这里是自己在文件里写了一个 get_time，然后 TOOLS = [get_time] —— 只有 1 个工具。
-#   而 Day43 的 tools.py 里有 5 个：web_search / calculate / get_time / get_weather / read_file。
-#   两条路（命令行那条走 agent_graph.py，网页这条走 api.py）用不同的工具箱，
-#   结果就是：同一个 Agent，在命令行里会查天气，在网页接口上却说"我没有查天气的工具"。
-#   ★ 本机实测过这个现象（问它"北京天气怎么样"，它答"我目前可用的工具只有 get_time"）。
-#   所以改成 from tools import TOOLS，两条路共用同一份清单，谁也别想偷跑。
-from tools import TOOLS                    # TOOLS = tools.py 里那张工具清单（5 个函数装成的 list）
+# ---------- 第 4 部分：工具清单（从 tools.py 取全项目唯一那一份）----------
+# ★ Day53 第一次改（这条已经生效）：原来这里是自己在文件里写了一个 get_time，
+#   然后 TOOLS = [get_time] —— 只有 1 个工具，问它"北京天气怎么样"，
+#   它答"我目前可用的工具只有 get_time"（本机实测过这个现象）。
+#   所以改成 from tools import TOOLS。
+# ★ 2026-10-07 第二次改（这次才真正做成）：Day53 那句注释写的是"两条路共用同一份清单"，
+#   但其实【没做到】—— agent_graph.py（网页 8501 那条路）自己另藏了一张 6 个的清单，
+#   跟这里这张 5 个的不一样：add / query_package 那边有、这边没有，read_file 这边有、那边没有。
+#   现在 agent_graph.py 也改成 from tools import TOOLS 了，两条路拿到的才是同一个列表对象。
+from tools import TOOLS                    # TOOLS = tools.py 里那张【全项目唯一】的工具清单（7 个函数装成的 list）
+# 7 个是：web_search 联网搜索 / calculate 算数学 / add 两数相加 / get_time 查时间
+#         / get_weather 查天气 / read_file 读文件 / query_package 查快递
 # 注意：tools.py 里的函数本身就带 docstring 和类型标注，bind_tools / ToolNode 认这个，
 #       不用再在外面包一层 @tool 装饰器。
 

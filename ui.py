@@ -26,16 +26,31 @@ except Exception as e:                             # e = error 的缩写，装�
     AGENT_ERROR = str(e)                           # 把错误原因存成文字，稍后显示给用户
 
 try:
-    from tools import TOOLS                        # TOOLS = 工具注册表（名字 -> 函数）
-    # ★ 真踩过的坑：本项目的 TOOLS 是一个【列表】，里面装的是函数本身，
-    #   所以不能写 TOOLS.keys()（会报 AttributeError: 'list' object has no attribute 'keys'），
-    #   而且这个错会被下面的 except 默默吞掉，侧边栏就永远显示"工具列表为空"，很难发现。
-    #   列表里取名字要用 函数.__name__。这里两种形态都兼容：
+    from agent_graph import TOOLS                  # ★修：必须和上面 Agent 用同一份清单，否则侧边栏显示的和实际能调的会对不上
+    # ★ 2026-10-07 补最关键的一句：agent_graph.py 里的 TOOLS 现在【本身就是从 tools.py 导入的】，
+    #   而且 api.py（8000 端口）导入的也是同一个列表 —— 全项目只有一份清单了。
+    #   所以这一行从 agent_graph 拿，和直接从 tools 拿，结果完全一样，怎么写都对。
+    # ★ 真踩过的坑（两个，2026-09-27 一起修掉）：
+    #   坑1【导入源错了】：原来写的是 from tools import TOOLS，
+    #     但页面真正调用的是 agent_graph.app，它绑的是 agent_graph.py 自己的 TOOLS。
+    #     两份清单内容不一样 —— 侧边栏显示"有联网搜索、有读文件"，可网页根本调不了这两个；
+    #     网页明明能调 add（加法）和 query_package（查快递），侧边栏里反而看不到。
+    #     所以改成和 Agent 同一个来源 agent_graph，两边永远一致。
+    #     （2026-10-07 更进一步：干脆把两份清单合并成一份，从根上断掉这个坑，见 tools.py 末尾那段。）
+    #   坑2【取名字的写法错了】：@tool 装饰出来的工具对象【没有 __name__】，只有 .name。
+    #     原来写 getattr(t, "__name__", str(t)) 会退到 str(t)，
+    #     在侧边栏里塞进一行 194 个字符的垃圾。所以要 .name 优先、__name__ 兜底。
+    #     （2026-10-07 注：合并后清单里装的是 tools.py 的【普通函数】，
+    #       普通函数反过来 —— 有 __name__、没有 .name，所以正好走到下面 __name__ 那一档，照样对。）
+    #   另外 TOOLS 是【列表】不是字典，不能写 TOOLS.keys()
+    #   （会报 AttributeError: 'list' object has no attribute 'keys'，
+    #     而且这个错会被下面的 except 默默吞掉，侧边栏就永远显示"工具列表为空"，很难发现）。
     if isinstance(TOOLS, dict):                # 万一以后换成了字典形式
         TOOL_NAMES = list(TOOLS.keys())        # keys() = 取出所有名字；list() = 变成列表
     else:                                      # 现在是列表形式（本项目就是这种）
-        TOOL_NAMES = [getattr(t, "__name__", str(t)) for t in TOOLS]   # __name__ = 函数名
-except Exception:                                  # 万一 tools.py 也没有
+        TOOL_NAMES = [getattr(t, "name", None) or getattr(t, "__name__", str(t)) for t in TOOLS]
+        # .name 优先（@tool 对象有它）→ __name__ 兜底（普通函数有它）→ 都没有才 str(t)
+except Exception:                                  # 万一 agent_graph 也没拿到
     TOOLS = {}                                     # 空字典
     TOOL_NAMES = []                                # 空列表
 
